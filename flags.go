@@ -12,6 +12,8 @@ import (
 // as a dependency.
 type prefixVar []*dep.StoreKeyPrefix
 
+type serviceVar []*dep.HealthServices
+
 func (pv *prefixVar) Set(value string) error {
 	value = strings.TrimPrefix(value, "/")
 	prefix, err := dep.ParseStoreKeyPrefix(value)
@@ -31,6 +33,28 @@ func (pv *prefixVar) String() string {
 	list := make([]string, 0, len(*pv))
 	for _, prefix := range *pv {
 		list = append(list, prefix.Prefix)
+	}
+	return strings.Join(list, ", ")
+}
+
+func (sv *serviceVar) Set(value string) error {
+	services, err := dep.ParseHealthServices(value)
+	if err != nil {
+		return err
+	}
+
+	if *sv == nil {
+		*sv = make([]*dep.HealthServices, 0, 1)
+	}
+	*sv = append(*sv, services)
+
+	return nil
+}
+
+func (sv *serviceVar) String() string {
+	list := make([]string, 0, len(*sv))
+	for _, services := range *sv {
+		list = append(list, services.Name)
 	}
 	return strings.Join(list, ", ")
 }

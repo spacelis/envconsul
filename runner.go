@@ -60,7 +60,7 @@ type Runner struct {
 	watcher *watch.Watcher
 
 	// data is the latest representation of the data from Consul.
-	data map[string][]*dep.KeyPair
+	data map[string]interface{}
 
 	// env is the last compiled environment.
 	env map[string]string
@@ -96,6 +96,10 @@ func (r *Runner) Start() {
 	// Add the dependencies to the watcher
 	for _, prefix := range r.config.Prefixes {
 		r.watcher.Add(prefix)
+	}
+
+	for _, service := range r.config.Services {
+		r.watcher.Add(service)
 	}
 
 	var err error
@@ -179,7 +183,7 @@ func (r *Runner) Stop() {
 func (r *Runner) Receive(d dep.Dependency, data interface{}) {
 	r.Lock()
 	defer r.Unlock()
-	r.data[d.HashCode()] = data.([]*dep.KeyPair)
+	r.data[d.HashCode()] = data
 }
 
 // Signal sends a signal to the child process, if it exists. Any errors that
@@ -207,16 +211,16 @@ func (r *Runner) Run() (<-chan int, error) {
 	//
 	// We iterate over the list of config prefixes so that order is maintained,
 	// since order in a map is not deterministic.
-	for _, dep := range r.config.Prefixes {
-		data, ok := r.data[dep.HashCode()]
+	for _, dependent := range r.config.Prefixes {
+		data, ok := r.data[dependent.HashCode()]
 		if !ok {
-			log.Printf("[INFO] (runner) missing data for %s", dep.Display())
+			log.Printf("[INFO] (runner) missing data for %s", dependent.Display())
 			return nil, nil
 		}
 
 		// For each pair, update the environment hash. Subsequent runs could
 		// overwrite an existing key.
-		for _, pair := range data {
+		for _, pair := range data.([]*dep.KeyPair) {
 			key, value := pair.Key, string(pair.Value)
 
 			if r.config.Sanitize {
@@ -233,6 +237,39 @@ func (r *Runner) Run() (<-chan int, error) {
 			} else {
 				log.Printf("[DEBUG] (runner) setting %s=%q", key, value)
 				env[key] = value
+			}
+		}
+	}
+
+	for _, dependent := range r.config.Services {
+		data, ok := r.data[dependent.HashCode()]
+		if !ok {
+			log.Printf("[INFO] (runner) missing data for %s", dependent.Display())
+			return nil, nil
+		}
+
+		// For each pair, update the environment hash. Subsequent runs could
+		// overwrite an existing key.
+		for _, service := range data.([]*dep.HealthService) {
+			// TODO change catelog service to health service.
+			name, addr, port := service.Name, service.Address, fmt.Sprintf("%d", service.Port)
+			addrkey := fmt.Sprintf("%s_ADDR", name)
+			portkey := fmt.Sprintf("%s_PORT", name)
+
+			if current, ok := env[addrkey]; ok {
+				log.Printf("[DEBUG] (runner) overwriting %s=%q (was %q)", addrkey, addr, current)
+				env[addrkey] = addr
+			} else {
+				log.Printf("[DEBUG] (runner) setting %s=%q", addrkey, addr)
+				env[addrkey] = addr
+			}
+
+			if current, ok := env[portkey]; ok {
+				log.Printf("[DEBUG] (runner) overwriting %s=%q (was %q)", portkey, port, current)
+				env[portkey] = port
+			} else {
+				log.Printf("[DEBUG] (runner) setting %s=%q", portkey, port)
+				env[portkey] = port
 			}
 		}
 	}
@@ -331,7 +368,7 @@ func (r *Runner) init() error {
 	}
 	r.watcher = watcher
 
-	r.data = make(map[string][]*dep.KeyPair)
+	r.data = make(map[string]interface{})
 
 	r.outStream = os.Stdout
 	r.errStream = os.Stderr

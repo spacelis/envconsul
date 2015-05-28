@@ -85,7 +85,7 @@ func (cli *CLI) Run(args []string) int {
 	}
 
 	var command []string
-	if len(config.Prefixes) > 0 {
+	if len(config.Prefixes) > 0 || len(config.Services) > 0 {
 		command = parsedArgs
 	} else {
 		if len(parsedArgs) < 2 {
@@ -186,6 +186,7 @@ func (cli *CLI) parseFlags(args []string) (*Config, []string, bool, bool, error)
 	flags.Var((*watch.WaitVar)(config.Wait), "wait", "")
 	flags.DurationVar(&config.Retry, "retry", config.Retry, "")
 	flags.Var((*prefixVar)(&config.Prefixes), "prefix", "")
+	flags.Var((*serviceVar)(&config.Services), "service", "")
 	flags.BoolVar(&config.Sanitize, "sanitize", config.Sanitize, "")
 	flags.BoolVar(&config.Upcase, "upcase", config.Upcase, "")
 	flags.StringVar(&config.Path, "config", config.Path, "")
@@ -240,6 +241,7 @@ Options:
   -prefix                  A prefix to watch, multiple prefixes are merged from
                            left to right, with the right-most result taking
                            precedence
+  -service                 A service to watch
   -sanitize                Replace invalid characters in keys to underscores
   -upcase                  Convert all environment variable keys to uppercase
 

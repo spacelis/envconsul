@@ -32,6 +32,10 @@ type Config struct {
 	Prefixes    []*dep.StoreKeyPrefix `mapstructure:"-"`
 	PrefixesRaw []string              `mapstructure:"prefixes"`
 
+	// Service is the list of Service name dependencies.
+	Services    []*dep.HealthServices `mapstructure:"-"`
+	ServicesRaw []string              `mapstructure:"services"`
+
 	// Auth is the HTTP basic authentication for communicating with Consul.
 	Auth    *Auth   `mapstructure:"-"`
 	AuthRaw []*Auth `mapstructure:"auth"`
@@ -100,6 +104,20 @@ func (c *Config) Merge(config *Config) {
 		}
 	}
 
+	if config.Services != nil {
+		if c.Services == nil {
+			c.Services = make([]*dep.HealthServices, 0)
+			c.ServicesRaw = make([]string, 0)
+		}
+
+		for _, service := range config.Services {
+			c.Services = append(c.Services, service)
+		}
+
+		for _, serviceRaw := range config.ServicesRaw {
+			c.ServicesRaw = append(c.ServicesRaw, serviceRaw)
+		}
+	}
 	if config.Auth != nil {
 		c.Auth = &Auth{
 			Enabled:  config.Auth.Enabled,
@@ -211,6 +229,17 @@ func ParseConfig(path string) (*Config, error) {
 		config.Prefixes = append(config.Prefixes, prefix)
 	}
 
+	// Parse the services
+	for i, serviceRaw := range config.ServicesRaw {
+		config.ServicesRaw[i] = serviceRaw
+
+		service, err := dep.ParseHealthServices(serviceRaw)
+		if err != nil {
+			errs = multierror.Append(errs, err)
+			continue
+		}
+		config.Services = append(config.Services, service)
+	}
 	// Parse the MaxStale component
 	if raw := config.MaxStaleRaw; raw != "" {
 		stale, err := time.ParseDuration(raw)
