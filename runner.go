@@ -250,11 +250,16 @@ func (r *Runner) Run() (<-chan int, error) {
 
 		// For each pair, update the environment hash. Subsequent runs could
 		// overwrite an existing key.
-		for _, service := range data.([]*dep.HealthService) {
+		for i, service := range data.([]*dep.HealthService) {
 			// TODO change catelog service to health service.
 			name, addr, port := service.Name, service.Address, fmt.Sprintf("%d", service.Port)
-			addrkey := fmt.Sprintf("%s_ADDR", name)
-			portkey := fmt.Sprintf("%s_PORT", name)
+			addrkey := fmt.Sprintf("service_%s_%d_addr", name, i+1)
+			portkey := fmt.Sprintf("service_%s_%d_port", name, i+1)
+
+			if r.config.Upcase {
+				addrkey = strings.ToUpper(addrkey)
+				portkey = strings.ToUpper(portkey)
+			}
 
 			if current, ok := env[addrkey]; ok {
 				log.Printf("[DEBUG] (runner) overwriting %s=%q (was %q)", addrkey, addr, current)
